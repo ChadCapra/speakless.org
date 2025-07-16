@@ -16,13 +16,8 @@
         ];
 
 		shellHook = ''
-			# Automatically install node dependencies if node_modules is missing
-			if [ ! -d "node_modules" ]; then
-				echo "node_modules not found. Running npm install..."
-				npm install
-			fi
-			
 			echo "Speakless dev shell ready!"
+			node --version
         '';
       };
     };
