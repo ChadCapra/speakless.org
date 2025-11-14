@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+# Run on every push to the 'main' branch
+on:
+  push:
+    branches: [ main ]
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between builds
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 # Use a current LTS version
+
+      - name: Install dependencies
+        run: npm ci # 'ci' is faster and safer than 'install' in CI
+
+      - name: Build the site
+        # This is where you pass the repo name to the 'base' path config
+        run: npm run build
+        env:
+          NODE_ENV: production
+          BASE_PATH: /speakless.org
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'build' # This must match your 'pages' adapter config
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
