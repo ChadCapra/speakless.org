@@ -12,7 +12,7 @@ const config = {
             // It's 'build' by default, which matches your expectation.
             pages: 'build',
             assets: 'build',
-            fallback: null, // Use null for a multi-page static site. Use 'index.html' for an SPA.
+            fallback: "index.html", // Use null for a multi-page static site. Use 'index.html' for an SPA.
             precompress: false,
             strict: true
         }),
