@@ -1,6 +1,5 @@
 // src/lib/types.ts
 
-// --- 1. Define the shapes of your data ---
 export type Position = 'LW' | 'C' | 'RW' | 'LD' | 'RD';
 
 export type Player = {
@@ -15,19 +14,21 @@ export type GameClock = {
     period: number;
 };
 
-export type LogEntry = {
-    timestamp: string;
+// NEW: This represents a COMPLETED shift
+export type ShiftEntry = {
     period: number;
-    gameTime: number;
-    event: 'ON' | 'OFF';
-    player: Player | null; // Allow null for "Empty"
-    position: Position;
+    playerNum: string;
+    playerName: string;
+    timeOn: string;  // e.g. "15:00"
+    timeOff: string; // e.g. "14:15"
+    durationSeconds: number;
 };
 
-// --- 2. Define the shape of the entire app ---
 export type AppState = {
     roster: Player[];
     onIce: Record<Position, Player | null>;
+    // NEW: We track WHEN the current player went on ice (Game Time Seconds)
+    shiftStarts: Record<Position, number | null>; 
     gameClock: GameClock;
-    gameLog: LogEntry[];
+    shiftLog: ShiftEntry[]; // Changed from 'gameLog' to 'shiftLog'
 };

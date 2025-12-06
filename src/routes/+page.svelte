@@ -2,39 +2,24 @@
     import { onMount, onDestroy } from 'svelte';
     import { appState, initializeStatePersistence } from '$lib/state.svelte.ts';
     import PlayerSlot from '$lib/PlayerSlot.svelte';
+    import type { Player } from '$lib/types.ts';
 
     let rosterText = $state('');
-    
-    onMount(() => {
-		// This "anchors" the $effect to this page component, giving it a home.
-        initializeStatePersistence();
+    let timerInterval: any = null;
 
-        rosterText = appState.roster.map(p => `${p.number},${p.name},${p.position}`).join('\n');
-    });
+    let clockMinutes = $derived(Math.floor(appState.gameClock.time / 60));
+    let clockSeconds = $derived(appState.gameClock.time % 60);
 
-    function saveRoster() {
-        appState.roster = rosterText
-            .split('\n')
-            .filter(line => line.trim() !== '')
-            .map(line => {
-                const parts = line.split(',').map(s => s.trim());
-                return {
-                    number: parts[0],
-                    name: parts[1],
-                    // Force position to uppercase and cast as Position
-                    position: parts[2].toUpperCase() as (typeof appState.onIce) extends Record<infer P, any> ? P : never
-                };
-            });
-        alert('Roster Saved!');
+    const MINUTE_OPTIONS = Array.from({ length: 21 }, (_, i) => 20 - i);
+    const SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => 59 - i);
+
+    function updateTime(newMin: number, newSec: number) {
+        appState.gameClock.time = (newMin * 60) + newSec;
     }
-
-    // --- Timer Logic ---
-    let timerInterval: any = null; // Use 'any' or 'NodeJS.Timeout'
 
     function startTimer() {
         if (appState.gameClock.isRunning) return;
         appState.gameClock.isRunning = true;
-
         timerInterval = setInterval(() => {
             if (appState.gameClock.time > 0) {
                 appState.gameClock.time -= 1;
@@ -51,37 +36,52 @@
     }
 
     function toggleTimer() {
-        if (appState.gameClock.isRunning) {
-            stopTimer();
-        } else {
-            startTimer();
-        }
+        if (appState.gameClock.isRunning) stopTimer();
+        else startTimer();
     }
 
-    function adjustTime(amount: number) {
-        appState.gameClock.time += amount;
-    }
-
-    function formatTime(seconds: number) {
+    function formatDuration(seconds: number) {
         const min = Math.floor(seconds / 60);
         const sec = seconds % 60;
         return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
+    // --- Roster Logic (Single Team) ---
+    function loadRosterText() {
+        rosterText = appState.roster.map(p => `${p.number},${p.name},${p.position}`).join('\n');
+    }
+
+    function saveRoster() {
+        const parsedPlayers = rosterText.split('\n').filter(l => l.trim()).map(line => {
+            const [num, name, pos] = line.split(',').map(s => s.trim());
+            return { number: num, name: name, position: pos.toUpperCase() } as Player;
+        });
+        appState.roster = parsedPlayers;
+        alert(`Roster saved!`);
+    }
+
     onMount(() => {
-        if (appState.gameClock.isRunning) {
-            startTimer();
-        }
+        initializeStatePersistence();
+        loadRosterText();
+        if (appState.gameClock.isRunning) startTimer();
     });
 
     onDestroy(() => {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-        }
+        if (timerInterval) clearInterval(timerInterval);
     });
 
-    let logOutput = $derived(JSON.stringify(appState.gameLog, null, 2));
-
+    // --- CSV OUTPUT: SHIFTS ---
+    let csvLogOutput = $derived.by(() => {
+        const header = "Period,PlayerNum,PlayerName,TimeOn,TimeOff,Duration\n";
+        // Show newest shifts at the top? Or bottom. Let's do newest at top.
+        const reversedLog = [...appState.shiftLog].reverse();
+        
+        const rows = reversedLog.map(entry => {
+            const dur = formatDuration(entry.durationSeconds);
+            return `${entry.period},${entry.playerNum},${entry.playerName},${entry.timeOn},${entry.timeOff},${dur}`;
+        }).join('\n');
+        return header + rows;
+    });
 </script>
 
 <main>
@@ -92,19 +92,23 @@
             <button onclick={() => appState.gameClock.period++}>+</button>
         </div>
 
-        <button 
-            type="button"
-            class="clock" 
-            onclick={toggleTimer} 
-            class:running={appState.gameClock.isRunning}
-        >
-            {formatTime(appState.gameClock.time)}
-        </button>
-        
-        <div class="time-adjust">
-            <button onclick={() => adjustTime(-10)}>-10s</button>
-            <button onclick={() => adjustTime(10)}>+10s</button>
+        <div class="clock-display" class:running={appState.gameClock.isRunning}>
+            <select value={clockMinutes} onchange={(e) => updateTime(parseInt(e.currentTarget.value), clockSeconds)}>
+                {#each MINUTE_OPTIONS as m}
+                    <option value={m}>{m}</option>
+                {/each}
+            </select>
+            <span class="colon">:</span>
+            <select value={clockSeconds} onchange={(e) => updateTime(clockMinutes, parseInt(e.currentTarget.value))} >
+                {#each SECOND_OPTIONS as s}
+                    <option value={s}>{s < 10 ? '0'+s : s}</option>
+                {/each}
+            </select>
         </div>
+        
+        <button class="start-stop-btn" onclick={toggleTimer}>
+            {appState.gameClock.isRunning ? 'STOP' : 'START'}
+        </button>
     </div>
 
     <div class="on-ice-container">
@@ -116,60 +120,41 @@
         <PlayerSlot position="RD" />
     </div>
 
-    <div class="roster-config">
-        <h3>Roster (Number,Name,Position)</h3>
-        <textarea bind:value={rosterText} rows="10" placeholder="18,Cooper,C&#10;22,Jones,C..."></textarea>
-        <button onclick={saveRoster}>Save Roster</button>
+    <div class="log-output">
+        <h3>Shift Log (CSV)</h3>
+        <textarea readonly rows="15">{csvLogOutput}</textarea>
     </div>
 
-    <div class="log-output">
-        <h3>Shift Log (for Copy/Paste)</h3>
-        <textarea readonly rows="20">{logOutput}</textarea>
+    <div class="roster-config">
+        <details>
+            <summary>Edit Roster / Lines</summary>
+            <textarea bind:value={rosterText} rows="10"></textarea>
+            <button onclick={saveRoster}>Save Roster</button>
+        </details>
     </div>
 </main>
 
 <style>
-    main {
-        font-family: sans-serif;
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 15px;
-    }
+    main { font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 15px; padding-bottom: 50px;}
+    
     .clock-controls {
-        text-align: center;
-        border: 2px solid #333;
-        border-radius: 8px;
-        padding: 10px;
+        text-align: center; border: 2px solid #333; border-radius: 8px; padding: 10px;
+        background: #222; color: white; margin-bottom: 20px;
     }
-    .clock {
-        /* This style block makes our <button> look like the old <h1> */
-        font-size: 4em;
-        font-family: 'monospace';
-        margin: 10px 0;
-        cursor: pointer;
-        user-select: none;
+    .clock-display { display: flex; justify-content: center; align-items: center; margin: 10px 0; }
+    .clock-display select {
+        background: #333; color: white; border: none; font-size: 3.5rem;
+        font-family: 'monospace'; appearance: none; padding: 0 10px; cursor: pointer; text-align: center;
+    }
+    .clock-display.running select { color: #0f0; }
+    .colon { font-size: 3.5rem; margin: 0 5px; position: relative; top: -5px; }
 
-        /* Reset button styles */
-        background: none;
-        border: none;
-        color: inherit;
-        padding: 0;
-        width: 100%;
-        text-align: center;
-    }
-    .clock.running {
-        color: green;
-    }
-    .period-controls, .time-adjust {
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-    }
-    .on-ice-container, .roster-config, .log-output {
-        margin-top: 30px;
-    }
-    textarea {
-        width: 100%;
-        box-sizing: border-box;
-    }
+    .period-controls { display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;}
+    .start-stop-btn { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px;}
+    
+    .on-ice-container, .roster-config, .log-output { margin-top: 30px; }
+    textarea { width: 100%; box-sizing: border-box; font-family: monospace; }
+    
+    details { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    summary { cursor: pointer; font-weight: bold; }
 </style>
