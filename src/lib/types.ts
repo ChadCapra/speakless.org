@@ -14,7 +14,7 @@ export type GameClock = {
     period: number;
 };
 
-// NEW: This represents a COMPLETED shift
+// Represents a COMPLETED shift
 export type ShiftEntry = {
     period: number;
     playerNum: string;
@@ -27,8 +27,8 @@ export type ShiftEntry = {
 export type AppState = {
     roster: Player[];
     onIce: Record<Position, Player | null>;
-    // NEW: We track WHEN the current player went on ice (Game Time Seconds)
+    // Track WHEN the current player went on ice (Game Time Seconds)
     shiftStarts: Record<Position, number | null>; 
     gameClock: GameClock;
-    shiftLog: ShiftEntry[]; // Changed from 'gameLog' to 'shiftLog'
+    shiftLog: ShiftEntry[];
 };

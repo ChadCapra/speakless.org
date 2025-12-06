@@ -1,6 +1,11 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { appState, initializeStatePersistence } from '$lib/state.svelte.ts';
+    import { 
+        appState, 
+        initializeStatePersistence, 
+        clearShiftLog,
+        nextPeriod 
+    } from '$lib/state.svelte.ts';
     import PlayerSlot from '$lib/PlayerSlot.svelte';
     import type { Player } from '$lib/types.ts';
 
@@ -46,7 +51,20 @@
         return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
-    // --- Roster Logic (Single Team) ---
+    // --- Actions ---
+    function handleClearLog() {
+        if (confirm("Are you sure you want to clear the shift log? (Make sure you copied it first!)")) {
+            clearShiftLog();
+        }
+    }
+
+    function handleNextPeriod() {
+        if (confirm("End this period? This will log all current shifts, clear the ice, and reset the clock.")) {
+            nextPeriod();
+        }
+    }
+
+    // --- Roster Logic ---
     function loadRosterText() {
         rosterText = appState.roster.map(p => `${p.number},${p.name},${p.position}`).join('\n');
     }
@@ -73,7 +91,6 @@
     // --- CSV OUTPUT: SHIFTS ---
     let csvLogOutput = $derived.by(() => {
         const header = "Period,PlayerNum,PlayerName,TimeOn,TimeOff,Duration\n";
-        // Show newest shifts at the top? Or bottom. Let's do newest at top.
         const reversedLog = [...appState.shiftLog].reverse();
         
         const rows = reversedLog.map(entry => {
@@ -106,9 +123,15 @@
             </select>
         </div>
         
-        <button class="start-stop-btn" onclick={toggleTimer}>
-            {appState.gameClock.isRunning ? 'STOP' : 'START'}
-        </button>
+        <div class="main-actions">
+            <button class="start-stop-btn" onclick={toggleTimer}>
+                {appState.gameClock.isRunning ? 'STOP' : 'START'}
+            </button>
+            
+            <button class="next-period-btn" onclick={handleNextPeriod}>
+                Next Period >>
+            </button>
+        </div>
     </div>
 
     <div class="on-ice-container">
@@ -121,7 +144,10 @@
     </div>
 
     <div class="log-output">
-        <h3>Shift Log (CSV)</h3>
+        <div class="log-header">
+            <h3>Shift Log (CSV)</h3>
+            <button class="clear-btn" onclick={handleClearLog}>Clear Log</button>
+        </div>
         <textarea readonly rows="15">{csvLogOutput}</textarea>
     </div>
 
@@ -150,11 +176,27 @@
     .colon { font-size: 3.5rem; margin: 0 5px; position: relative; top: -5px; }
 
     .period-controls { display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;}
-    .start-stop-btn { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px;}
+    
+    .main-actions { display: flex; gap: 10px; margin-top: 15px; }
+
+    .start-stop-btn {
+        flex: 2; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+        background: #444; color: white; border: none; border-radius: 4px;
+    }
+
+    .next-period-btn {
+        flex: 1; background: #004488; color: white; border: none; border-radius: 4px;
+        font-weight: bold; cursor: pointer;
+    }
+    .next-period-btn:hover { background: #003366; }
     
     .on-ice-container, .roster-config, .log-output { margin-top: 30px; }
     textarea { width: 100%; box-sizing: border-box; font-family: monospace; }
     
     details { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
     summary { cursor: pointer; font-weight: bold; }
+
+    .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .clear-btn { background: #d00; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    .clear-btn:hover { background: #b00; }
 </style>
