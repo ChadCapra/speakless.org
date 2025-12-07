@@ -1,6 +1,4 @@
-// src/lib/types.ts
-
-export type Position = 'LW' | 'C' | 'RW' | 'LD' | 'RD';
+export type Position = 'LW' | 'C' | 'RW' | 'LD' | 'RD' | 'G';
 
 export type Player = {
     number: string;
@@ -14,21 +12,20 @@ export type GameClock = {
     period: number;
 };
 
-// Represents a COMPLETED shift
 export type ShiftEntry = {
     period: number;
     playerNum: string;
     playerName: string;
-    timeOn: string;  // e.g. "15:00"
-    timeOff: string; // e.g. "14:15"
+    timeOn: string;
+    timeOff: string;
     durationSeconds: number;
+    position: Position;
 };
 
 export type AppState = {
     roster: Player[];
     onIce: Record<Position, Player | null>;
-    // Track WHEN the current player went on ice (Game Time Seconds)
-    shiftStarts: Record<Position, number | null>; 
+    shiftStarts: Record<Position, number | null>;
     gameClock: GameClock;
     shiftLog: ShiftEntry[];
 };

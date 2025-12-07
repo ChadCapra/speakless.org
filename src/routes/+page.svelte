@@ -1,104 +1,50 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { 
-        appState, 
-        initializeStatePersistence, 
-        clearShiftLog,
-        nextPeriod 
-    } from '$lib/state.svelte.ts';
+    import { appState, initializePersistence, nextPeriod, clearLog } from '$lib/state.svelte.ts';
+    import { generateCsv } from '$lib/logic/game';
     import PlayerSlot from '$lib/PlayerSlot.svelte';
-    import type { Player } from '$lib/types.ts';
 
-    let rosterText = $state('');
     let timerInterval: any = null;
 
     let clockMinutes = $derived(Math.floor(appState.gameClock.time / 60));
     let clockSeconds = $derived(appState.gameClock.time % 60);
-
+    
     const MINUTE_OPTIONS = Array.from({ length: 21 }, (_, i) => 20 - i);
     const SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => 59 - i);
 
-    function updateTime(newMin: number, newSec: number) {
-        appState.gameClock.time = (newMin * 60) + newSec;
-    }
+    let csvLogOutput = $derived(generateCsv(appState.shiftLog));
 
-    function startTimer() {
-        if (appState.gameClock.isRunning) return;
-        appState.gameClock.isRunning = true;
-        timerInterval = setInterval(() => {
-            if (appState.gameClock.time > 0) {
-                appState.gameClock.time -= 1;
-            } else {
-                stopTimer();
-            }
-        }, 1000);
-    }
-
-    function stopTimer() {
-        appState.gameClock.isRunning = false;
-        clearInterval(timerInterval);
-        timerInterval = null;
+    function updateTime(min: number, sec: number) {
+        appState.gameClock.time = (min * 60) + sec;
     }
 
     function toggleTimer() {
-        if (appState.gameClock.isRunning) stopTimer();
-        else startTimer();
-    }
-
-    function formatDuration(seconds: number) {
-        const min = Math.floor(seconds / 60);
-        const sec = seconds % 60;
-        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
-    }
-
-    // --- Actions ---
-    function handleClearLog() {
-        if (confirm("Are you sure you want to clear the shift log? (Make sure you copied it first!)")) {
-            clearShiftLog();
+        if (appState.gameClock.isRunning) {
+            appState.gameClock.isRunning = false;
+            clearInterval(timerInterval);
+        } else {
+            appState.gameClock.isRunning = true;
+            timerInterval = setInterval(() => {
+                if (appState.gameClock.time > 0) appState.gameClock.time--;
+                else toggleTimer();
+            }, 1000);
         }
     }
 
     function handleNextPeriod() {
-        if (confirm("End this period? This will log all current shifts, clear the ice, and reset the clock.")) {
-            nextPeriod();
-        }
+        if (confirm("End Period? Logs shifts, clears ice, resets clock.")) nextPeriod();
     }
 
-    // --- Roster Logic ---
-    function loadRosterText() {
-        rosterText = appState.roster.map(p => `${p.number},${p.name},${p.position}`).join('\n');
-    }
-
-    function saveRoster() {
-        const parsedPlayers = rosterText.split('\n').filter(l => l.trim()).map(line => {
-            const [num, name, pos] = line.split(',').map(s => s.trim());
-            return { number: num, name: name, position: pos.toUpperCase() } as Player;
-        });
-        appState.roster = parsedPlayers;
-        alert(`Roster saved!`);
+    function handleClearLog() {
+        if (confirm("Clear Log?")) clearLog();
     }
 
     onMount(() => {
-        initializeStatePersistence();
-        loadRosterText();
-        if (appState.gameClock.isRunning) startTimer();
+        initializePersistence();
+        if (appState.gameClock.isRunning) toggleTimer(); 
     });
-
-    onDestroy(() => {
-        if (timerInterval) clearInterval(timerInterval);
-    });
-
-    // --- CSV OUTPUT: SHIFTS ---
-    let csvLogOutput = $derived.by(() => {
-        const header = "Period,PlayerNum,PlayerName,TimeOn,TimeOff,Duration\n";
-        const reversedLog = [...appState.shiftLog].reverse();
-        
-        const rows = reversedLog.map(entry => {
-            const dur = formatDuration(entry.durationSeconds);
-            return `${entry.period},${entry.playerNum},${entry.playerName},${entry.timeOn},${entry.timeOff},${dur}`;
-        }).join('\n');
-        return header + rows;
-    });
+    
+    onDestroy(() => clearInterval(timerInterval));
 </script>
 
 <main>
@@ -111,15 +57,11 @@
 
         <div class="clock-display" class:running={appState.gameClock.isRunning}>
             <select value={clockMinutes} onchange={(e) => updateTime(parseInt(e.currentTarget.value), clockSeconds)}>
-                {#each MINUTE_OPTIONS as m}
-                    <option value={m}>{m}</option>
-                {/each}
+                {#each MINUTE_OPTIONS as m} <option value={m}>{m}</option> {/each}
             </select>
             <span class="colon">:</span>
             <select value={clockSeconds} onchange={(e) => updateTime(clockMinutes, parseInt(e.currentTarget.value))} >
-                {#each SECOND_OPTIONS as s}
-                    <option value={s}>{s < 10 ? '0'+s : s}</option>
-                {/each}
+                {#each SECOND_OPTIONS as s} <option value={s}>{s < 10 ? '0'+s : s}</option> {/each}
             </select>
         </div>
         
@@ -127,20 +69,23 @@
             <button class="start-stop-btn" onclick={toggleTimer}>
                 {appState.gameClock.isRunning ? 'STOP' : 'START'}
             </button>
-            
-            <button class="next-period-btn" onclick={handleNextPeriod}>
-                Next Period >>
-            </button>
+            <button class="next-period-btn" onclick={handleNextPeriod}>Next Period >></button>
         </div>
     </div>
 
-    <div class="on-ice-container">
-        <h3>On Ice</h3>
-        <PlayerSlot position="LW" />
-        <PlayerSlot position="C" />
-        <PlayerSlot position="RW" />
-        <PlayerSlot position="LD" />
-        <PlayerSlot position="RD" />
+    <div class="rink-layout">
+        <div class="line-row forwards">
+            <div class="slot"><PlayerSlot position="LW" /></div>
+            <div class="slot"><PlayerSlot position="C" /></div>
+            <div class="slot"><PlayerSlot position="RW" /></div>
+        </div>
+        <div class="line-row defense">
+            <div class="slot"><PlayerSlot position="LD" /></div>
+            <div class="slot"><PlayerSlot position="RD" /></div>
+        </div>
+        <div class="line-row goalie">
+            <div class="slot"><PlayerSlot position="G" /></div>
+        </div>
     </div>
 
     <div class="log-output">
@@ -150,53 +95,28 @@
         </div>
         <textarea readonly rows="15">{csvLogOutput}</textarea>
     </div>
-
-    <div class="roster-config">
-        <details>
-            <summary>Edit Roster / Lines</summary>
-            <textarea bind:value={rosterText} rows="10"></textarea>
-            <button onclick={saveRoster}>Save Roster</button>
-        </details>
-    </div>
 </main>
 
 <style>
     main { font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 15px; padding-bottom: 50px;}
-    
-    .clock-controls {
-        text-align: center; border: 2px solid #333; border-radius: 8px; padding: 10px;
-        background: #222; color: white; margin-bottom: 20px;
-    }
+    .clock-controls { text-align: center; border: 2px solid #333; border-radius: 8px; padding: 10px; background: #222; color: white; margin-bottom: 20px; }
     .clock-display { display: flex; justify-content: center; align-items: center; margin: 10px 0; }
-    .clock-display select {
-        background: #333; color: white; border: none; font-size: 3.5rem;
-        font-family: 'monospace'; appearance: none; padding: 0 10px; cursor: pointer; text-align: center;
-    }
+    .clock-display select { background: #333; color: white; border: none; font-size: 3.5rem; font-family: 'monospace'; appearance: none; padding: 0 10px; cursor: pointer; text-align: center; }
     .clock-display.running select { color: #0f0; }
     .colon { font-size: 3.5rem; margin: 0 5px; position: relative; top: -5px; }
-
     .period-controls { display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px;}
-    
     .main-actions { display: flex; gap: 10px; margin-top: 15px; }
-
-    .start-stop-btn {
-        flex: 2; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
-        background: #444; color: white; border: none; border-radius: 4px;
-    }
-
-    .next-period-btn {
-        flex: 1; background: #004488; color: white; border: none; border-radius: 4px;
-        font-weight: bold; cursor: pointer;
-    }
-    .next-period-btn:hover { background: #003366; }
-    
-    .on-ice-container, .roster-config, .log-output { margin-top: 30px; }
+    .start-stop-btn { flex: 2; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; }
+    .next-period-btn { flex: 1; background: #004488; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    .on-ice-container, .log-output { margin-top: 30px; }
     textarea { width: 100%; box-sizing: border-box; font-family: monospace; }
-    
-    details { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-    summary { cursor: pointer; font-weight: bold; }
-
     .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
     .clear-btn { background: #d00; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
-    .clear-btn:hover { background: #b00; }
+
+    /* NEW LAYOUT STYLES */
+    .rink-layout { background: #f0f8ff; border: 2px solid #2a4b8d; border-radius: 15px; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .line-row { display: flex; justify-content: center; gap: 10px; }
+    .slot { flex: 1; max-width: 33%; }
+    .defense .slot { max-width: 45%; }
+    .goalie .slot { max-width: 45%; }
 </style>

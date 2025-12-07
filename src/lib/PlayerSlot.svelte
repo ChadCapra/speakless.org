@@ -1,135 +1,91 @@
 <script lang="ts">
-    import { appState } from '$lib/state.svelte.ts';
-    import type { Position } from '$lib/types.ts';
+    import { appState, subPlayer, correctPlayer } from '$lib/state.svelte.ts';
+    import { calculateDuration, formatTime } from '$lib/utils/time';
+    import type { Position } from '$lib/types';
 
     let { position } = $props<{ position: Position }>();
 
-    // Filter roster for this position
-    let positionPlayers = $derived(
-        appState.roster.filter(p => p.position === position)
-    );
-    
+    let sortedRoster = $derived([...appState.roster].sort((a, b) => {
+        if (a.position === position && b.position !== position) return -1;
+        if (a.position !== position && b.position === position) return 1;
+        return parseInt(a.number) - parseInt(b.number);
+    }));
+
     let currentPlayer = $derived(appState.onIce[position]);
     let startOfShift = $derived(appState.shiftStarts[position]);
 
-    // --- LIVE DURATION CALCULATION ---
-    // Game Clock counts DOWN. 
-    // Duration = StartTime - CurrentTime.
-    // e.g. Started at 15:00 (900s), Current is 14:00 (840s) -> 60s duration.
     let currentShiftDuration = $derived.by(() => {
         if (!currentPlayer || startOfShift === null) return 0;
-        return startOfShift - appState.gameClock.time;
+        return calculateDuration(startOfShift, appState.gameClock.time);
     });
 
-    function formatDuration(seconds: number) {
-        if (seconds < 0) return "0:00"; // Safety check
-        const min = Math.floor(seconds / 60);
-        const sec = seconds % 60;
-        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
-    }
-
-    // Helper to format 15:00 style
-    function formatClock(seconds: number) {
-        const min = Math.floor(seconds / 60);
-        const sec = seconds % 60;
-        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
-    }
-
-    function rotateNextPlayer() {
-        if (positionPlayers.length === 0) return;
-        const currentIndex = positionPlayers.findIndex(p => p.number === currentPlayer?.number);
-        const nextIndex = (currentIndex + 1) % positionPlayers.length;
-        changePlayer(positionPlayers[nextIndex]);
-    }
-
-    function handleSelectChange(event: Event) {
+    function handleCorrection(event: Event) {
         const selectedNumber = (event.target as HTMLSelectElement).value;
-        if (!selectedNumber) {
-            changePlayer(null);
-            return;
-        }
-        const newPlayer = appState.roster.find(p => p.number === selectedNumber);
-        changePlayer(newPlayer!);
+        const newPlayer = appState.roster.find(p => p.number === selectedNumber) || null;
+        correctPlayer(position, newPlayer);
     }
 
-    function changePlayer(newPlayer: (typeof appState.roster[0]) | null) {
-        const oldPlayer = appState.onIce[position];
-        const oldStart = appState.shiftStarts[position];
-        const currentTime = appState.gameClock.time;
+    function rotateNext() {
+        const positionPlayers = appState.roster.filter(p => p.position === position);
+        if (positionPlayers.length === 0) return;
 
-        // 1. If someone was on the ice, LOG THE COMPLETED SHIFT
-        if (oldPlayer && oldStart !== null) {
-            const duration = oldStart - currentTime;
-            
-            appState.shiftLog.push({
-                period: appState.gameClock.period,
-                playerNum: oldPlayer.number,
-                playerName: oldPlayer.name,
-                timeOn: formatClock(oldStart),
-                timeOff: formatClock(currentTime),
-                durationSeconds: duration
-            });
-        }
-
-        // 2. Put new player on ice and RECORD START TIME
-        appState.onIce[position] = newPlayer;
+        const currentIdx = positionPlayers.findIndex(p => p.number === currentPlayer?.number);
+        const nextIdx = (currentIdx + 1) % positionPlayers.length;
         
-        if (newPlayer) {
-            appState.shiftStarts[position] = currentTime;
-        } else {
-            appState.shiftStarts[position] = null;
-        }
+        subPlayer(position, positionPlayers[nextIdx]);
+    }
+
+    function sendToBench() {
+        subPlayer(position, null);
     }
 </script>
 
-<div class="player-slot">
-    <div class="pos-label">{position}</div>
+<div class="card">
+    <div class="header">
+        <span class="pos-badge">{position}</span>
+        <div class="timer" class:warn={currentShiftDuration > 60}>
+            {formatTime(currentShiftDuration)}
+        </div>
+    </div>
     
-    <select onchange={handleSelectChange} value={currentPlayer?.number || ''}>
-        <option value="">--</option>
-        {#each positionPlayers as player}
-            <option value={player.number}>
-                #{player.number} {player.name}
-            </option>
-        {/each}
+    <select onchange={handleCorrection} value={currentPlayer?.number || ''}>
+        <option value="">(Empty / Penalty)</option>
+        <optgroup label="Default {position}s">
+            {#each sortedRoster.filter(p => p.position === position) as p}
+                <option value={p.number}>#{p.number} {p.name}</option>
+            {/each}
+        </optgroup>
+        <optgroup label="Others">
+            {#each sortedRoster.filter(p => p.position !== position) as p}
+                <option value={p.number}>#{p.number} {p.name}</option>
+            {/each}
+        </optgroup>
     </select>
 
-    <div class="live-timer" class:long-shift={currentShiftDuration > 60}>
-        {formatDuration(currentShiftDuration)}
+    <div class="actions">
+        <button class="bench-btn" onclick={sendToBench} title="Send to Bench / Pull Goalie">X</button>
+        
+        {#if position !== 'G'}
+            <button class="next-btn" onclick={rotateNext}>Next</button>
+        {/if}
     </div>
-
-    <button onclick={rotateNextPlayer}>Next</button>
 </div>
 
 <style>
-    .player-slot {
-        display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-        background: #f4f4f4; padding: 10px; border-radius: 4px;
+    .card {
+        background: white; border: 1px solid #ccc; border-radius: 6px;
+        padding: 5px; display: flex; flex-direction: column; gap: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    .pos-label { width: 30px; font-weight: bold; font-size: 1.1rem; }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .pos-badge { font-weight: bold; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.9rem;}
+    .timer { font-family: monospace; font-size: 1.1rem; }
+    .timer.warn { color: #d00; font-weight: bold; }
     
-    /* Make select take available space, but share with timer */
-    select { flex-grow: 1; padding: 10px; font-size: 1.1rem; min-width: 0; }
+    select { padding: 8px; font-size: 1rem; border: 1px solid #ddd; border-radius: 4px; width: 100%;}
     
-    .live-timer {
-        font-family: monospace;
-        font-size: 1.2rem;
-        padding: 5px 10px;
-        background: #ddd;
-        border-radius: 4px;
-        min-width: 50px;
-        text-align: center;
-    }
-
-    /* Visual cue if shift is over 60 seconds */
-    .live-timer.long-shift {
-        background: #ffcccc;
-        color: #d00;
-        font-weight: bold;
-    }
-
-    button { 
-        padding: 10px 15px; font-size: 1rem; cursor: pointer; 
-        background: #333; color: white; border: none; border-radius: 4px;
-    }
+    .actions { display: flex; gap: 5px; }
+    button { padding: 8px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;}
+    .next-btn { background: #333; color: white; flex-grow: 1; }
+    .bench-btn { background: #ddd; color: #333; width: 40px; }
 </style>
