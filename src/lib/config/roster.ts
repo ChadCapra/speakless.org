@@ -11,9 +11,9 @@ export const DEFAULT_ROSTER: Player[] = [
     { number: "17", name: "Asher", position: "LW" },
     { number: "8", name: "Hawk", position: "C" },
     { number: "18", name: "JJ", position: "RW" },
-    { number: "20", name: "Mason", position: "LW" },
+    { number: "11", name: "Tucker", position: "LW" },
     { number: "10", name: "Harper", position: "C" },
-    { number: "11", name: "Tucker", position: "RW" },
+    { number: "20", name: "Mason", position: "RW" },
     { number: "29", name: "Easton", position: "G" },
     { number: "33", name: "Raylan", position: "G" }
 ];
