@@ -1,19 +1,16 @@
 import type { Player } from '$lib/types';
 
 export const DEFAULT_ROSTER: Player[] = [
-    { number: "15", name: "Max", position: "LD" },
-    { number: "14", name: "Hudson", position: "RD" },
-    { number: "5", name: "Tyler", position: "LD" },
-    { number: "67", name: "Brayden", position: "RD" },
-    { number: "4", name: "Bo", position: "LW" },
-    { number: "16", name: "Ryan", position: "C" },
-    { number: "9", name: "Griffin", position: "RW" },
-    { number: "17", name: "Asher", position: "LW" },
-    { number: "8", name: "Hawk", position: "C" },
-    { number: "18", name: "JJ", position: "RW" },
-    { number: "11", name: "Tucker", position: "LW" },
-    { number: "10", name: "Harper", position: "C" },
-    { number: "20", name: "Mason", position: "RW" },
-    { number: "29", name: "Easton", position: "G" },
-    { number: "33", name: "Raylan", position: "G" }
+    { number: "9", name: "Connor", position: "LD" },
+    { number: "14", name: "Dowdle", position: "RD" },
+    { number: "21", name: "Jack", position: "LD" },
+    { number: "19", name: "Manny", position: "RD" },
+    { number: "5", name: "Clem", position: "LW" },
+    { number: "24", name: "Cooper", position: "C" },
+    { number: "26", name: "Kaleb", position: "RW" },
+    { number: "12", name: "Caleb", position: "LW" },
+    { number: "91", name: "Freddy", position: "C" },
+    { number: "22", name: "John", position: "RW" },
+    { number: "3", name: "Finn", position: "LW" },
+    { number: "29", name: "Rafferty", position: "G" }
 ];
